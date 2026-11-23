@@ -32,6 +32,8 @@ jobs:
       AOSP_BRANCH: ${{ vars.AOSP_BRANCH || 'android-latest-release' }}
       AOSP_LUNCH_TARGET: ${{ vars.AOSP_LUNCH_TARGET || 'aosp_cf_x86_64_only_phone-aosp_current-userdebug' }}
       REPO_SYNC_JOBS: "8"
+      BUILD_JOBS: ${{ vars.BUILD_JOBS || '' }}
+      CCACHE_MAXSIZE: ${{ vars.CCACHE_MAXSIZE || '50G' }}
 
     steps:
       - name: Check out build configuration
