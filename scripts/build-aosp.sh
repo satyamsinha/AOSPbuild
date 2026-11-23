@@ -37,23 +37,28 @@ repo init --partial-clone --no-use-superproject \
   -u "$AOSP_MANIFEST_URL" \
   -b "$AOSP_BRANCH"
 
-# Optional local manifest overlays are maintained in this GitHub repository.
-if compgen -G "$GITHUB_WORKSPACE/manifest/*.xml" >/dev/null; then
+# Replace repository-managed local manifest overlays on each run.
+if [[ -d "$GITHUB_WORKSPACE/manifest" ]]; then
   mkdir -p .repo/local_manifests
-  cp "$GITHUB_WORKSPACE"/manifest/*.xml .repo/local_manifests/
+  find .repo/local_manifests -maxdepth 1 -type f -name '*.xml' -delete
+  if compgen -G "$GITHUB_WORKSPACE/manifest/*.xml" >/dev/null; then
+    cp "$GITHUB_WORKSPACE"/manifest/*.xml .repo/local_manifests/
+  fi
 fi
 
 echo "==> Synchronizing AOSP source"
 repo sync -c -j"$REPO_SYNC_JOBS"
 
 # Apply patches stored as patches/<AOSP project path>/*.patch.
+# Already-applied patches are detected so repeat builds remain usable.
 if [[ -d "$GITHUB_WORKSPACE/patches" ]]; then
   while IFS= read -r -d '' patch_file; do
     relative_path="${patch_file#"$GITHUB_WORKSPACE/patches/"}"
-    project_path="${relative_path%%/*}"
-    if [[ "$relative_path" == */* ]]; then
-      project_path="${relative_path%/*}"
+    if [[ "$relative_path" != */* ]]; then
+      echo "ERROR: Put each patch under patches/<AOSP project path>/*.patch: $patch_file" >&2
+      exit 1
     fi
+    project_path="${relative_path%/*}"
     project_dir="$AOSP_WORKDIR/$project_path"
 
     if [[ ! -d "$project_dir/.git" ]]; then
@@ -61,9 +66,15 @@ if [[ -d "$GITHUB_WORKSPACE/patches" ]]; then
       exit 1
     fi
 
-    echo "==> Applying $patch_file to $project_path"
-    git -C "$project_dir" apply --check "$patch_file"
-    git -C "$project_dir" apply "$patch_file"
+    if git -C "$project_dir" apply --check "$patch_file"; then
+      echo "==> Applying $patch_file to $project_path"
+      git -C "$project_dir" apply "$patch_file"
+    elif git -C "$project_dir" apply --reverse --check "$patch_file"; then
+      echo "==> Patch already applied: $patch_file"
+    else
+      echo "ERROR: Patch does not apply cleanly: $patch_file" >&2
+      exit 1
+    fi
   done < <(find "$GITHUB_WORKSPACE/patches" -type f -name '*.patch' -print0 | sort -z)
 fi
 
