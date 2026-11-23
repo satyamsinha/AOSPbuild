@@ -35,7 +35,7 @@ ccache -M 50G
 
 echo
 echo "Setup complete."
-echo "Repo: $(repo version | head -n 1)"
+repo version
 echo "AOSP workspace: /data/aosp"
 echo "ccache directory: /data/ccache"
 echo
