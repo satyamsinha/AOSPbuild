@@ -22,7 +22,8 @@ concurrency:
 jobs:
   build:
     # Register a dedicated Ubuntu x86_64 host with the custom "aosp" label.
-    runs-on: [self-hosted, linux, x64, aosp]
+    #runs-on: [self-hosted, linux, x64, aosp]
+    runs-on: self-hosted
     timeout-minutes: 720
 
     env:
