@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/**"
       - "patches/**"
+      - "manifest/**"
       - "config/**"
       - ".github/workflows/**"
       - "README.md"
@@ -20,13 +21,13 @@ concurrency:
 
 jobs:
   build:
-    # A full AOSP build needs a provisioned Linux host with persistent disk.
-    # Register that host as a self-hosted runner with the "aosp" label.
+    # Register a dedicated Ubuntu x86_64 host with the custom "aosp" label.
     runs-on: [self-hosted, linux, x64, aosp]
-    timeout-minutes: 360
+    timeout-minutes: 720
 
     env:
       AOSP_WORKDIR: /data/aosp
+      CCACHE_DIR: /data/ccache
       AOSP_MANIFEST_URL: https://android.googlesource.com/platform/manifest
       AOSP_BRANCH: ${{ vars.AOSP_BRANCH || 'android-latest-release' }}
       AOSP_LUNCH_TARGET: ${{ vars.AOSP_LUNCH_TARGET || 'aosp_cf_x86_64_only_phone-aosp_current-userdebug' }}
@@ -45,6 +46,7 @@ jobs:
           free -h
           df -h /data
           command -v repo
+          command -v ccache
           command -v python3
 
       - name: Sync and build AOSP
