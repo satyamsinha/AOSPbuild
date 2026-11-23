@@ -1,0 +1,65 @@
+name: AOSP build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "patches/**"
+      - "config/**"
+      - ".github/workflows/**"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aosp-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # A full AOSP build needs a provisioned Linux host with persistent disk.
+    # Register that host as a self-hosted runner with the "aosp" label.
+    runs-on: [self-hosted, linux, x64, aosp]
+    timeout-minutes: 360
+
+    env:
+      AOSP_WORKDIR: /data/aosp
+      AOSP_MANIFEST_URL: https://android.googlesource.com/platform/manifest
+      AOSP_BRANCH: ${{ vars.AOSP_BRANCH || 'android-latest-release' }}
+      AOSP_LUNCH_TARGET: ${{ vars.AOSP_LUNCH_TARGET || 'aosp_cf_x86_64_only_phone-aosp_current-userdebug' }}
+      REPO_SYNC_JOBS: "8"
+
+    steps:
+      - name: Check out build configuration
+        uses: actions/checkout@v4
+
+      - name: Check runner capacity
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          nproc
+          free -h
+          df -h /data
+          command -v repo
+          command -v python3
+
+      - name: Sync and build AOSP
+        shell: bash
+        run: ./scripts/build-aosp.sh
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aosp-cuttlefish-images-${{ github.run_number }}
+          path: |
+            /data/aosp/out/dist/**
+            /data/aosp/out/target/product/aosp_cf_x86_64_only_phone/*.img
+            /data/aosp/out/target/product/aosp_cf_x86_64_only_phone/*.zip
+          if-no-files-found: warn
+          compression-level: 1
+          retention-days: 7
