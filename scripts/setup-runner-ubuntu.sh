@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Run this script manually on a dedicated Ubuntu x86_64 build host.
-# Provision at least 64 GB RAM and 500 GB free SSD; 128 GB RAM and
-# 1 TB NVMe are preferable for a smoother full AOSP build.
+# Run as the same non-root user that will run the GitHub Actions runner.
+# Recommended host: Ubuntu x86_64, 64+ GB RAM, 500 GB+ free SSD.
 
 if [[ "$(uname -m)" != "x86_64" ]]; then
-  echo "This initial runner setup targets Ubuntu x86_64." >&2
+  echo "This runner setup targets Ubuntu x86_64." >&2
   exit 1
 fi
 
@@ -18,19 +17,27 @@ sudo apt-get install -y \
   unzip fontconfig python3 python-is-python3 rsync \
   ccache libssl-dev libelf-dev
 
-mkdir -p "$HOME/bin" /data/aosp /data/ccache
-curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo \
-  -o "$HOME/bin/repo"
-chmod 0755 "$HOME/bin/repo"
+# Install Repo and verify Google's published signature.
+tmp_repo="$(mktemp)"
+trap 'rm -f "$tmp_repo" "$tmp_repo.asc"' EXIT
+curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$tmp_repo"
+curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo.asc -o "$tmp_repo.asc"
+gpg --keyserver hkps://keyserver.ubuntu.com \
+  --recv-keys 8BB9AD793E8E6153AF0F9A4416530D5E920F5C65
+gpg --verify "$tmp_repo.asc" "$tmp_repo"
+sudo install -m 0755 "$tmp_repo" /usr/local/bin/repo
 
-if ! grep -q 'HOME/bin' "$HOME/.profile" 2>/dev/null; then
-  echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.profile"
-fi
+# Create persistent work/cache directories accessible to this runner user.
+sudo mkdir -p /data/aosp /data/ccache
+sudo chown -R "$USER":"$(id -gn)" /data/aosp /data/ccache
+
+ccache -M 50G
 
 echo
-echo "Setup complete. Log out/in or run:"
-echo '  export PATH="$HOME/bin:$PATH"'
-echo '  ccache -M 50G'
+echo "Setup complete."
+echo "Repo: $(repo version | head -n 1)"
+echo "AOSP workspace: /data/aosp"
+echo "ccache directory: /data/ccache"
 echo
 echo "Next: register this machine as a GitHub self-hosted runner"
 echo "with labels including: linux, x64, aosp."
